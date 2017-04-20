@@ -75,10 +75,15 @@ unsigned char Hamming::encoder(unsigned char chara)
 		bit6++;
 		bit7++;
 	}
-	// Module 2 to convert back into binary, then shift into place.
-	bit5 = bit5 % 2 << 3;
-	bit6 = bit6 % 2 << 2;
-	bit7 = bit7 % 2 << 1;
+
+	// Modulo 2 to convert back into binary, then shift into place.
+	bit5 = bit5 & 0x01;
+	bit6 = bit6 & 0x01;
+	bit7 = bit7 & 0x01;
+
+	bit5 = bit5 << 3;
+	bit6 = bit6 << 2;
+	bit7 = bit7 << 1;
 
 	// Add it into the character to form a codeword.
 	codeword = chara ^ bit5 ^ bit6 ^ bit7;
@@ -97,7 +102,8 @@ unsigned char Hamming::decoder(unsigned char chara)
 	unsigned char syn1 = 0,
 		      syn2 = 0,
 		      syn3 = 0,
-		      syndrome;
+		      mask;
+	int syndrome;
 
 	// Generates the syndrome buffer.
 	if ((chara & b1) != 0x00)
@@ -135,30 +141,22 @@ unsigned char Hamming::decoder(unsigned char chara)
 	}
 
 	// Shifts into place according to binary values and combines.
-	syn1 = syn1 % 2 << 2;
-	syn2 = syn2 % 2 << 1;
-	syn3 = syn3 % 2;
+	//syn1 = syn1 % 2 << 2;
+	//syn2 = syn2 % 2 << 1;
+	//syn3 = syn3 % 2;
+	
+	syn1 = syn1 & 0x01;
+	syn2 = syn2 & 0x01;
+	syn3 = syn3 & 0x01;
+
+	syn1 = syn1 << 2;
+	syn2 = syn2 << 1;
+
 	syndrome = syn1 ^ syn2 ^ syn3;
 
-	// Converts to decimal for clarity/posterity, then checks for
-	// the corrupted bit.
-	syndrome = syndrome ^ 0x30;
+	mask = 0x01 << (8 - syndrome);
+	chara = chara ^ mask;
 
-	if (syndrome == '1')
-		chara = chara ^ b1;
-	else if (syndrome == '2')
-		chara = chara ^ b2;
-	else if (syndrome == '3')
-		chara = chara ^ b3;
-	else if (syndrome == '4')
-		chara = chara ^ b4;
-	else if (syndrome == '5')
-		chara = chara ^ b5;
-	else if (syndrome == '6')
-		chara = chara ^ b6;
-	else if (syndrome == '7')
-		chara = chara ^ b7;
-	
 	// Shifts down to standardize/align.
 	chara = chara >> 4;
 
@@ -175,8 +173,8 @@ unsigned char Hamming::decoder(unsigned char chara)
  */
 void Hamming::encode(ifstream& file, ofstream& ofile)
 {
-	char chara;
-	unsigned char set1, set2;
+	char character;
+	unsigned char set1, set2, chara;
 	unsigned char codeword [2];
 
 	// Reports the number of characters in the file.
@@ -185,13 +183,15 @@ void Hamming::encode(ifstream& file, ofstream& ofile)
 	file.seekg(0, file.beg);
 
 	cout << "Your input is: " << endl;
-	while (file.get(chara))
+	while (file.get(character))
 	{
+		chara = character;
 		cout << chara;
 		cout << " = " << bitset<8>(chara) << " == ";
 		// b1 = first four, b2 = last four.
-		set1 = chara >> 4;
-		set2 = chara << 4;
+		character = chara;
+		set1 = character >> 4;
+		set2 = character << 4;
 		set2 = set2 >> 4;
 		cout << bitset<8>(set1) << " + " << bitset<8>(set2) << endl;
 		codeword[0] = encoder(set1);
@@ -250,7 +250,7 @@ void Hamming::corrupt(ifstream& file)
 {
 	ofstream cfile ("corrupted_file.txt");
 	char chara;
-	unsigned char corrupt;
+	unsigned char corrupt, corrupted, mask;
 	int random, count = 0;
 
 	if (cfile.is_open() && file.is_open()) 
@@ -258,32 +258,12 @@ void Hamming::corrupt(ifstream& file)
 		while (file.get(chara))
 		{	
 			// Corrupts a random bit.
-			random = rand() % 7 + 1;
-			switch(random) {
-				case 1 :
-					corrupt = chara ^ b1;
-					break;
-				case 2 :
-					corrupt = chara ^ b2;
-					break;
-				case 3 : 
-					corrupt = chara ^ b3;
-					break;
-				case 4 : 
-					corrupt = chara ^ b4;
-					break;
-				case 5 : 
-					corrupt = chara ^ b5;
-					break;
-				case 6 : 
-					corrupt = chara ^ b6;
-					break;
-				case 7 :
-					corrupt = chara ^ b7;
-					break;
-				default :
-					cout << "Something went wrong..." << endl;
-			}
+			random = rand() & 0x07;
+			corrupt = chara;
+			
+			mask = 0x01 << random;
+			corrupt = corrupt ^ mask;
+
 			count++;
 			cfile << corrupt;
 		}
@@ -314,5 +294,4 @@ int main()
 	else 
 		cout << "There was an issue opening the file. Perhaps there is an issue with permissions?" << endl;
 
-	return 0;
 }
